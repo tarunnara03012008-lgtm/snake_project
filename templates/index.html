@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Game | Mini Project</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            background: #101827;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 560px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #65e6a5;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #bdc8d8;
+            margin-bottom: 20px;
+        }
+
+        .scoreboard {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+
+        .score-box {
+            flex: 1;
+            background: #202c40;
+            padding: 12px;
+            border-radius: 10px;
+        }
+
+        .score-box strong {
+            display: block;
+            font-size: 25px;
+            color: #65e6a5;
+            margin-top: 5px;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            max-width: 400px;
+            height: auto;
+            margin: auto;
+            background: #172438;
+            border: 3px solid #65e6a5;
+            border-radius: 8px;
+        }
+
+        .buttons {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 18px 0;
+        }
+
+        button {
+            border: none;
+            border-radius: 8px;
+            padding: 11px 18px;
+            background: #65e6a5;
+            color: #101827;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #a0f5c8;
+        }
+
+        #message {
+            min-height: 24px;
+            color: #ffd479;
+            font-weight: bold;
+        }
+
+        .help {
+            color: #bdc8d8;
+            font-size: 14px;
+            line-height: 1.8;
+        }
+
+        .panel {
+            background: #202c40;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 10px;
+            text-align: left;
+        }
+
+        .panel h2 {
+            color: #65e6a5;
+            font-size: 19px;
+            margin-top: 0;
+        }
+
+        #scores {
+            padding-left: 24px;
+        }
+
+        #apiStatus {
+            color: #65e6a5;
+            font-size: 13px;
+        }
+    </style>
+</head>
+
+<body>
+    <main class="container">
+        <h1>🐍 Snake Game</h1>
+        <p class="subtitle">Python + Flask REST API Mini Project</p>
+
+        <div class="scoreboard">
+            <div class="score-box">
+                Current Score
+                <strong id="score">0</strong>
+            </div>
+
+            <div class="score-box">
+                Best Score
+                <strong id="best">0</strong>
+            </div>
+        </div>
+
+        <canvas id="game" width="400" height="400"></canvas>
+
+        <div class="buttons">
+            <button id="startBtn">Start Game</button>
+            <button id="pauseBtn">Pause</button>
+            <button id="restartBtn">Restart</button>
+        </div>
+
+        <p id="message">Press Start Game to play!</p>
+
+        <p class="help">
+            Move: Arrow Keys or W, A, S, D<br>
+            Pause: Spacebar<br>
+            Eat the food and avoid the walls and yourself.
+        </p>
+
+        <section class="panel">
+            <h2>🏆 Top Scores</h2>
+            <ol id="scores">
+                <li>Loading scores...</li>
+            </ol>
+            <p id="apiStatus">Connecting to Flask API...</p>
+        </section>
+    </main>
+
+    <script>
+        const canvas = document.getElementById("game");
+        const ctx = canvas.getContext("2d");
+
+        const scoreElement = document.getElementById("score");
+        const bestElement = document.getElementById("best");
+        const message = document.getElementById("message");
+        const scoresList = document.getElementById("scores");
+        const apiStatus = document.getElementById("apiStatus");
+
+        const cell = 20;
+        const cells = canvas.width / cell;
+
+        let snake = [];
+        let food = {};
+        let dx = 1;
+        let dy = 0;
+        let score = 0;
+        let timer = null;
+        let running = false;
+        let gameOver = false;
+        let paused = false;
+        let saving = false;
+
+        function placeFood() {
+            do {
+                food = {
+                    x: Math.floor(Math.random() * cells),
+                    y: Math.floor(Math.random() * cells)
+                };
+            } while (
+                snake.some(part =>
+                    part.x === food.x && part.y === food.y
+                )
+            );
+        }
+
+        function draw() {
+            ctx.fillStyle = "#172438";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = "#ff657a";
+            ctx.fillRect(
+                food.x * cell + 2,
+                food.y * cell + 2,
+                cell - 4,
+                cell - 4
+            );
+
+            snake.forEach((part, index) => {
+                ctx.fillStyle = index === 0 ? "#a0f5c8" : "#65e6a5";
+
+                ctx.fillRect(
+                    part.x * cell + 1,
+                    part.y * cell + 1,
+                    cell - 2,
+                    cell - 2
+                );
+            });
+        }
+
+        function updateScore() {
+            scoreElement.textContent = score;
+        }
+
+        function startGame() {
+            clearInterval(timer);
+
+            snake = [
+                { x: 10, y: 10 },
+                { x: 9, y: 10 },
+                { x: 8, y: 10 }
+            ];
+
+            dx = 1;
+            dy = 0;
+            score = 0;
+            running = true;
+            paused = false;
+            gameOver = false;
+            saving = false;
+
+            updateScore();
+            placeFood();
+            draw();
+
+            message.textContent = "Game started! Good luck!";
+            timer = setInterval(moveSnake, 130);
+        }
+
+        function moveSnake() {
+            if (!running || paused || gameOver) return;
+
+            const head = {
+                x: snake[0].x + dx,
+                y: snake[0].y + dy
+            };
+
+            const ateFood =
+                head.x === food.x && head.y === food.y;
+
+            const bodyToCheck = ateFood
+                ? snake
+                : snake.slice(0, -1);
+
+            const hitWall =
+                head.x < 0 || head.x >= cells ||
+                head.y < 0 || head.y >= cells;
+
+            const hitSelf = bodyToCheck.some(part =>
+                part.x === head.x && part.y === head.y
+            );
+
+            if (hitWall || hitSelf) {
+                endGame();
+                return;
+            }
+
+            snake.unshift(head);
+
+            if (ateFood) {
+                score += 10;
+                updateScore();
+                placeFood();
+            } else {
+                snake.pop();
+            }
+
+            draw();
+        }
+
+        async function endGame() {
+            clearInterval(timer);
+            running = false;
+            gameOver = true;
+
+            message.textContent = "Game Over! Saving score...";
+            await submitScore();
+        }
+
+        async function submitScore() {
+            if (saving) return;
+            saving = true;
+
+            try {
+                const response = await fetch("/api/score", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ score: score })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || "Could not save score");
+                }
+
+                message.textContent =
+                    "Game Over! Score saved: " + score;
+
+                await loadScores();
+            } catch (error) {
+                message.textContent =
+                    "Game Over! Score could not be saved. Check API.";
+                console.error(error);
+            } finally {
+                saving = false;
+            }
+        }
+
+        function changeDirection(key) {
+            const directions = {
+                ArrowUp: [0, -1],
+                w: [0, -1],
+                ArrowDown: [0, 1],
+                s: [0, 1],
+                ArrowLeft: [-1, 0],
+                a: [-1, 0],
+                ArrowRight: [1, 0],
+                d: [1, 0]
+            };
+
+            const next = directions[key];
+            if (!next || !running || paused) return;
+
+            const [newDx, newDy] = next;
+
+            if (newDx === -dx && newDy === -dy) return;
+
+            dx = newDx;
+            dy = newDy;
+        }
+
+        function togglePause() {
+            if (!running || gameOver) return;
+
+            paused = !paused;
+            message.textContent = paused
+                ? "Game paused. Press Space to continue."
+                : "Game resumed!";
+        }
+
+        async function loadScores() {
+            try {
+                const response = await fetch("/api/scores");
+
+                if (!response.ok) {
+                    throw new Error("Could not load scores");
+                }
+
+                const data = await response.json();
+                scoresList.replaceChildren();
+
+                if (data.scores.length === 0) {
+                    const item = document.createElement("li");
+                    item.textContent = "No scores yet. Play a game!";
+                    scoresList.appendChild(item);
+                    bestElement.textContent = "0";
+                } else {
+                    data.scores.forEach(entry => {
+                        const item = document.createElement("li");
+                        item.textContent = entry.score + " points";
+                        scoresList.appendChild(item);
+                    });
+
+                    bestElement.textContent = data.scores[0].score;
+                }
+
+                apiStatus.textContent = "Flask API connected ✓";
+            } catch (error) {
+                apiStatus.textContent = "API connection failed!";
+                console.error(error);
+            }
+        }
+
+        async function checkAPI() {
+            try {
+                const response = await fetch("/api/health");
+                if (!response.ok) throw new Error("API unavailable");
+
+                const data = await response.json();
+                apiStatus.textContent = data.message;
+                await loadScores();
+            } catch (error) {
+                apiStatus.textContent = "Flask API connection failed!";
+            }
+        }
+
+        document.addEventListener("keydown", event => {
+            if (
+                ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
+                 " "].includes(event.key)
+            ) {
+                event.preventDefault();
+            }
+
+            if (event.key === " ") {
+                togglePause();
+                return;
+            }
+
+            changeDirection(event.key);
+        });
+
+        document.getElementById("startBtn")
+            .addEventListener("click", startGame);
+
+        document.getElementById("restartBtn")
+            .addEventListener("click", startGame);
+
+        document.getElementById("pauseBtn")
+            .addEventListener("click", togglePause);
+
+        // Connect the frontend to the Flask backend.
+        checkAPI();
+        draw();
+    </script>
+</body>
+</html>
